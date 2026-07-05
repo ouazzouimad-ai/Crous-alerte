@@ -1,0 +1,45 @@
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # toutes les 10 minutes
+  workflow_dispatch:          # permet aussi de le lancer manuellement depuis GitHub
+
+jobs:
+  check-logements:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Restaurer la mémoire des logements déjà vus
+        uses: actions/cache@v4
+        with:
+          path: seen_logements.json
+          key: seen-logements-${{ github.run_id }}
+          restore-keys: |
+            seen-logements-
+
+      - name: Lancer la vérification
+        env:
+          CROUS_EMAIL: ${{ secrets.CROUS_EMAIL }}
+          CROUS_PASSWORD: ${{ secrets.CROUS_PASSWORD }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 crous_alert.py
+
+      - name: Sauvegarder la mémoire des logements vus
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: seen_logements.json
+          key: seen-logements-${{ github.run_id }}
+
+
