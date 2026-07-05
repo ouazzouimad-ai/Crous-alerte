@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Surveillance des logements CROUS disponibles à Paris (phase complémentaire)
-et envoi d'une notification push (via ntfy.sh) dès qu'un nouveau logement apparaît.
+Surveillance des logements CROUS disponibles a Paris (phase complementaire)
+et envoi d'une notification push (via ntfy.sh) des qu'un nouveau logement apparait.
 """
 
 import json
@@ -14,8 +14,6 @@ from datetime import datetime
 import requests
 from playwright.sync_api import sync_playwright
 
-# ================== CONFIGURATION ==================
-# Les valeurs viennent des "Secrets" du repo GitHub (CROUS_EMAIL, CROUS_PASSWORD, NTFY_TOPIC)
 EMAIL = os.environ.get("CROUS_EMAIL", "TON_EMAIL_ICI")
 PASSWORD = os.environ.get("CROUS_PASSWORD", "TON_MOT_DE_PASSE_ICI")
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "crousalerte")
@@ -26,12 +24,11 @@ VILLE_RECHERCHEE = "Paris"
 
 STATE_FILE = Path(__file__).parent / "seen_logements.json"
 
-LOGIN_URL = "https://messervices.etudiant.gouv.fr/envole/"
+LOGIN_URL = "https://messervices.etudiant.gouv.fr/oauth2/login"
 LOGEMENT_URL = "https://trouverunlogement.lescrous.fr/tools/37/search?bounds=&academies=&regions=&occupationModes=&residence="
-# =====================================================
 
 
-def send_notification(title: str, message: str):
+def send_notification(title, message):
     try:
         requests.post(
             NTFY_URL,
@@ -43,7 +40,7 @@ def send_notification(title: str, message: str):
             },
             timeout=10,
         )
-        print(f"[{datetime.now()}] Notification envoyée : {title}")
+        print(f"[{datetime.now()}] Notification envoyee : {title}")
     except Exception as e:
         print(f"[{datetime.now()}] Erreur envoi notification : {e}")
 
@@ -54,7 +51,7 @@ def load_seen():
     return set()
 
 
-def save_seen(seen: set):
+def save_seen(seen):
     STATE_FILE.write_text(json.dumps(list(seen)))
 
 
@@ -65,22 +62,28 @@ def login_and_get_page(playwright):
 
     page.goto(LOGIN_URL, wait_until="networkidle")
 
-    page.fill('input[type="email"], input[name*="mail"]', EMAIL)
-    page.fill('input[type="password"], input[name*="pass"]', PASSWORD)
+    try:
+        page.click('img[src*="MSEConnect"]', timeout=10000)
+    except Exception:
+        page.click('a:has-text("MesServices"), button:has-text("MesServices")', timeout=10000)
+
+    page.wait_for_load_state("networkidle")
+
+    page.get_by_label(re.compile("Adresse courriel", re.IGNORECASE)).fill(EMAIL)
+    page.get_by_label(re.compile("Mot de passe", re.IGNORECASE)).fill(PASSWORD)
 
     try:
-        page.check('input[type="checkbox"]', timeout=3000)
+        page.get_by_text("Je ne suis pas un robot").click(timeout=5000)
     except Exception:
         pass
 
-    page.click('button:has-text("S\'identifier"), button[type="submit"]')
+    page.get_by_role("button", name=re.compile("S'identifier", re.IGNORECASE)).click()
     page.wait_for_load_state("networkidle")
 
     return browser, context, page
 
 
-def check_logements(page) -> list[dict]:
-    """Va sur la page de recherche et récupère les logements affichés pour Paris."""
+def check_logements(page):
     page.goto(LOGEMENT_URL, wait_until="networkidle")
     time.sleep(2)
 
@@ -121,17 +124,17 @@ def run_check():
         for l in nouveaux:
             resume = l["text"][:200]
             send_notification(
-                title=f"🏠 Nouveau logement CROUS à {VILLE_RECHERCHEE} !",
+                title=f"Nouveau logement CROUS a {VILLE_RECHERCHEE} !",
                 message=resume,
             )
             seen.add(l["id"])
         save_seen(seen)
     else:
-        print(f"[{datetime.now()}] Aucun nouveau logement à {VILLE_RECHERCHEE}.")
+        print(f"[{datetime.now()}] Aucun nouveau logement a {VILLE_RECHERCHEE}.")
 
 
 def main():
-    print(f"[{datetime.now()}] Vérification unique des logements CROUS...")
+    print(f"[{datetime.now()}] Verification unique des logements CROUS...")
     run_check()
 
 
