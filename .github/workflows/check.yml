@@ -2,12 +2,17 @@ name: Surveillance logement CROUS Paris
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: crous-watch
+  cancel-in-progress: false
 
 jobs:
   check-logements:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
@@ -30,7 +35,7 @@ jobs:
           restore-keys: |
             seen-logements-
 
-      - name: Lancer la vérification
+      - name: Lancer la surveillance continue
         env:
           CROUS_EMAIL: ${{ secrets.CROUS_EMAIL }}
           CROUS_PASSWORD: ${{ secrets.CROUS_PASSWORD }}
